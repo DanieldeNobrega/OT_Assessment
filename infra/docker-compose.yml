@@ -15,22 +15,3 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-
-  sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    container_name: sqlserver
-    ports:
-      - "1433:1433"
-    environment:
-      ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: ${SA_PASSWORD}
-    volumes:
-      - sql_data:/var/opt/mssql
-    healthcheck:
-      test: ["CMD", "/opt/mssql-tools18/bin/sqlcmd", "-C", "-S", "localhost,1433", "-U", "sa", "-P", "${SA_PASSWORD}", "-Q", "SELECT 1"]
-      interval: 15s
-      timeout: 10s
-      retries: 15
-
-volumes:
-  sql_data:

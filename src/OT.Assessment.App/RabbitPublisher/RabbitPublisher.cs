@@ -1,54 +1,69 @@
-﻿using Microsoft.Extensions.Options;
+﻿using System.Text.Json;
+using Microsoft.Extensions.Options;
 using OT.Assessment.App.Models;
 using RabbitMQ.Client;
-using System.Text;
 
-namespace OT.Assessment.App.RabbitPublisher
+namespace OT.Assessment.App.RabbitPublisher;
+
+public interface IRabbitPublisher
 {
-    public interface IRabbitPublisher
+    Task PublishAsync(Models.CasinoWagerMessage message, CancellationToken ct);
+}
+
+public sealed class RabbitPublisher : IRabbitPublisher, IDisposable
+{
+    private readonly IConnection _connection;
+    private readonly RabbitMqOptions _opts;
+    private readonly ILogger<RabbitPublisher> _log;
+
+    public RabbitPublisher(IOptions<RabbitMqOptions> opts, ILogger<RabbitPublisher> log)
     {
-        Task PublishAsync(CasinoWagerMessage message, CancellationToken ct);
+        _opts = opts.Value;
+        _log = log;
+
+        var factory = new ConnectionFactory
+        {
+            HostName = _opts.HostName,
+            Port = _opts.Port,
+            UserName = _opts.UserName,
+            Password = _opts.Password,
+            DispatchConsumersAsync = true,
+            // give the broker a bigger window to respond to RPCs (not used for publish here)
+            ContinuationTimeout = TimeSpan.FromSeconds(30)
+        };
+
+        _connection = factory.CreateConnection();
     }
 
-    public sealed class RabbitPublisher : IRabbitPublisher, IDisposable
+    public Task PublishAsync(Models.CasinoWagerMessage message, CancellationToken ct)
     {
-        private readonly RabbitMqOptions _opts;
-        private readonly IConnection _connection;
-        private readonly IModel _channel;
+        // channel-per-publish => thread-safe, no locks, no cross-request contention
+        using var ch = _connection.CreateModel();
 
-        public RabbitPublisher(IOptions<RabbitMqOptions> options)
-        {
-            _opts = options.Value;
-            var factory = new ConnectionFactory
-            {
-                HostName = _opts.HostName,
-                Port = _opts.Port,
-                UserName = _opts.UserName,
-                Password = _opts.Password,
-                DispatchConsumersAsync = true
-            };
-            _connection = factory.CreateConnection();
-            _channel = _connection.CreateModel();
-            _channel.QueueDeclare(queue: _opts.QueueName, durable: _opts.Durable, exclusive: false, autoDelete: false, arguments: null);
-            _channel.ConfirmSelect();
-        }
+        ch.QueueDeclare(queue: _opts.QueueName,
+                        durable: _opts.Durable,
+                        exclusive: false,
+                        autoDelete: false);
 
-        public Task PublishAsync(CasinoWagerMessage message, CancellationToken ct)
-        {
-            var body = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(message));
-            var props = _channel.CreateBasicProperties();
-            props.ContentType = "application/json";
-            props.DeliveryMode = 2; // persistent
+        var props = ch.CreateBasicProperties();
+        props.DeliveryMode = 2; // persistent
+        props.ContentType = "application/json";
+        props.MessageId = message.WagerId.ToString();
 
-            _channel.BasicPublish(exchange: "", routingKey: _opts.QueueName, basicProperties: props, body: body);
-            _channel.WaitForConfirmsOrDie(TimeSpan.FromSeconds(5));
-            return Task.CompletedTask;
-        }
+        var body = JsonSerializer.SerializeToUtf8Bytes(message);
 
-        public void Dispose()
-        {
-            try { _channel?.Close(); } catch { }
-            try { _connection?.Close(); } catch { }
-        }
+        ch.BasicPublish(exchange: "",
+                        routingKey: _opts.QueueName,
+                        mandatory: false,
+                        basicProperties: props,
+                        body: body);
+
+        return Task.CompletedTask;
+    }
+
+    public void Dispose()
+    {
+        try { _connection?.Close(); } catch { /* ignore */ }
+        _connection?.Dispose();
     }
 }

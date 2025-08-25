@@ -1,4 +1,5 @@
-﻿using OT.Assessment.App.Models;
+﻿using OT.Assessment.App.Messaging;
+using OT.Assessment.App.Models;
 using OT.Assessment.App.RabbitPublisher;
 using OT.Assessment.App.Repository;
 using Swashbuckle.AspNetCore.Annotations;
@@ -9,14 +10,13 @@ namespace OT.Assessment.App.Controllers
     [Route("api/[controller]")]
     public class PlayerController : ControllerBase
     {
-
-        private readonly IRabbitPublisher _publisher;
         private readonly IPlayerReadRepository _reads;
+        private readonly IPublishQueue _queue;
 
-        public PlayerController(IRabbitPublisher publisher, IPlayerReadRepository reads)
+        public PlayerController(IPublishQueue queue, IPlayerReadRepository reads)
         {
-            _publisher = publisher;
-            _reads = reads;
+            _queue = queue ?? throw new ArgumentNullException(nameof(queue));
+            _reads = reads ?? throw new ArgumentNullException(nameof(reads));
         }
 
         //POST api/player/casinowager
@@ -27,8 +27,7 @@ namespace OT.Assessment.App.Controllers
         [SwaggerResponse(StatusCodes.Status200OK)]
         public async Task<IActionResult> PostCasinoWager([FromBody] CasinoWagerMessage message, CancellationToken ct)
         {
-            if (message is null) return BadRequest("Body required.");
-            await _publisher.PublishAsync(message, ct);
+            await _queue.EnqueueAsync(message, ct);
             return Ok();
         }
 

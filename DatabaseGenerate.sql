@@ -129,3 +129,53 @@ BEGIN
     ORDER BY SUM(w.Amount) DESC;
 END
 GO
+
+-- TVP for bulk ingest
+IF TYPE_ID('casino.WagerIngestType') IS NULL
+    CREATE TYPE casino.WagerIngestType AS TABLE(
+        WagerId UNIQUEIDENTIFIER NOT NULL,
+        AccountId UNIQUEIDENTIFIER NOT NULL,
+        Username NVARCHAR(100) NOT NULL,
+        GameName NVARCHAR(200) NOT NULL,
+        Provider NVARCHAR(200) NOT NULL,
+        Amount DECIMAL(18,4) NOT NULL,
+        CreatedDateTime DATETIMEOFFSET NOT NULL,
+        PRIMARY KEY (WagerId)
+    );
+GO
+
+-- Bulk ingest sproc (upsert players, insert new wagers)
+IF OBJECT_ID('casino.usp_IngestWagersBulk') IS NOT NULL DROP PROCEDURE casino.usp_IngestWagersBulk;
+GO
+CREATE PROCEDURE casino.usp_IngestWagersBulk @Items casino.WagerIngestType READONLY
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    ;WITH PlayersAgg AS (
+        SELECT AccountId, MAX(Username) AS Username
+        FROM @Items GROUP BY AccountId
+    )
+    MERGE casino.Players AS tgt
+    USING PlayersAgg AS src
+    ON tgt.AccountId = src.AccountId
+    WHEN MATCHED AND tgt.Username <> src.Username THEN
+        UPDATE SET Username = src.Username
+    WHEN NOT MATCHED THEN
+        INSERT(AccountId, Username) VALUES(src.AccountId, src.Username);
+
+    INSERT INTO casino.Wagers (WagerId, AccountId, GameName, Provider, Amount, CreatedDateTime)
+    SELECT i.WagerId, i.AccountId, i.GameName, i.Provider, i.Amount, i.CreatedDateTime
+    FROM @Items i
+    LEFT JOIN casino.Wagers w ON w.WagerId = i.WagerId
+    WHERE w.WagerId IS NULL;
+END
+GO
+
+-- Covering index for paged GET (include projected cols)
+IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Wagers_Account_Created')
+    DROP INDEX IX_Wagers_Account_Created ON casino.Wagers;
+CREATE NONCLUSTERED INDEX IX_Wagers_Account_Created
+    ON casino.Wagers(AccountId, CreatedDateTime DESC)
+    INCLUDE (GameName, Provider, Amount);
+GO

@@ -1,0 +1,36 @@
+# .NET / VS
+bin/
+obj/
+.vs/
+*.user
+*.suo
+*.psess
+*.vspx
+*.pidb
+*.svclog
+*.ide/
+
+# Rider / VS Code
+.idea/
+.vscode/
+
+# Build output
+*.nupkg
+artifacts/
+
+# Logs
+*.log
+logs/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Local settings/secrets
+infra/.env
+*.secrets.json
+appsettings.Local*.json
+
+# Archives
+*.zip
+*.rar

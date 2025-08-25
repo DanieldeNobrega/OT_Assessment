@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>OT.Assessment.App</name>
+    </assembly>
+    <members>
+        <member name="M:OT.Assessment.App.Controllers.PlayerController.PostCasinoWager(OT.Assessment.App.Models.CasinoWagerMessage,System.Threading.CancellationToken)">
+            <summary>
+            Receives player casino wager events to publish to the local RabbitMQ queue.
+            </summary>
+        </member>
+        <member name="M:OT.Assessment.App.Controllers.PlayerController.GetCasinoForPlayer(System.Guid,System.Int32,System.Int32,System.Threading.CancellationToken)">
+            <summary>
+            Returns a paginated list of the latest casino wagers for a specific player (accountId).
+            </summary>
+        </member>
+        <!-- Badly formed XML comment ignored for member "M:OT.Assessment.App.Controllers.PlayerController.GetTopSpenders(System.Int32,System.Threading.CancellationToken)" -->
+    </members>
+</doc>

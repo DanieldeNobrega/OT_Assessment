@@ -1,6 +1,5 @@
 ﻿using OT.Assessment.App.Messaging;
 using OT.Assessment.App.Models;
-using OT.Assessment.App.RabbitPublisher;
 using OT.Assessment.App.Repository;
 using Swashbuckle.AspNetCore.Annotations;
 namespace OT.Assessment.App.Controllers
